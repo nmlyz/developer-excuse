@@ -1,64 +1,74 @@
 #!/usr/bin/env python3
-"""Write one developer excuse line to /output/entry.txt.
+"""developer-excuse: write one single-line developer excuse to a file.
 
-The line is the excuse a developer gives when code breaks in production.
-It is checked before anything is written: it must be a single line,
-non-blank, at most 200 characters, and end with a full stop. Only the
-standard library is used.
+Running this program writes the excuse to /output/entry.txt as UTF-8
+text: one line, terminated by a newline. It prints nothing on success.
+Only the Python standard library is used, and the output is identical
+on every run.
 """
 
 import os
 
-LINE = "I told the on-call it was a one-line change. It was one line. The line was `DROP DATABASE`."
+OUTPUT_DIR = "/output"
+OUTPUT_PATH = os.path.join(OUTPUT_DIR, "entry.txt")
 
-OUTPUT_PATH = "/output/entry.txt"
-MAX_LENGTH = 200
+# The excuse in three beats: the promise, the correction, the reveal.
+_BEATS = (
+    "I told the on-call it was a one-line change.",
+    "It was one line.",
+    "The line was `DROP DATABASE`.",
+)
+
+ENTRY = " ".join(_BEATS)
 
 
-def build_line():
-    """Return the excuse line."""
-    return LINE
+def build_entry():
+    """Return the excuse as a single line of text."""
+    return ENTRY
 
 
-def check_line(line):
-    """Collect every problem with the line; an empty list means it is fine.
+def validate_entry(text):
+    """Check the excuse before it is written.
 
-    The checks mirror the gate: one non-blank line of at most 200
-    characters, ending with a full stop, carrying the specific detail
-    that makes the excuse real.
+    The entry must be a single line of 1 to 200 characters, with no
+    control characters and no leading or trailing whitespace.
     """
-    problems = []
-    if not line.strip():
-        problems.append("line is blank")
-    if "\n" in line or "\r" in line:
-        problems.append("line spans more than one line")
-    if len(line) > MAX_LENGTH:
-        problems.append("line is %d characters, over the %d limit" % (len(line), MAX_LENGTH))
-    if not line.endswith("."):
-        problems.append("line does not end with a full stop")
-    for word in ("on-call", "one-line change", "DROP DATABASE"):
-        if word not in line:
-            problems.append("line is missing %r" % word)
-    return problems
+    if not isinstance(text, str):
+        raise TypeError("entry must be text")
+    if not 1 <= len(text) <= 200:
+        raise ValueError("entry must be 1 to 200 characters long")
+    if "\n" in text or "\r" in text:
+        raise ValueError("entry must be a single line")
+    if text != text.strip():
+        raise ValueError("entry must not start or end with whitespace")
+    if any(ord(ch) < 0x20 for ch in text):
+        raise ValueError("entry must not contain control characters")
+    return text
 
 
-def write_entry(line, path=OUTPUT_PATH):
-    """Write the checked line to the output file."""
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
+def write_entry(path=OUTPUT_PATH):
+    """Write the excuse to path, creating the output directory if needed.
+
+    The file itself is set to mode 0644; the output directory is left
+    untouched.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    text = validate_entry(build_entry())
     with open(path, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(line + "\n")
+        handle.write(text + "\n")
     os.chmod(path, 0o644)
+    # Read the file back and confirm it holds exactly the validated text.
+    with open(path, "rb") as handle:
+        written = handle.read()
+    if written != (text + "\n").encode("utf-8"):
+        raise IOError("written file does not match the entry")
+    return path
 
 
 def main():
-    line = build_line()
-    problems = check_line(line)
-    if problems:
-        raise SystemExit("refusing to write entry: " + "; ".join(problems))
-    write_entry(line)
+    write_entry()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
